@@ -1,0 +1,355 @@
+#include <GL/glew.h>
+#include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <vector>
+#include <iostream>
+#include <cmath>
+
+const int NUM_BODIES = 9;
+
+// Shader sources
+const char* vertexShaderSource = R"glsl(
+#version 330 core
+layout(location=0) in vec3 aPos;
+uniform mat4 model;
+uniform mat4 view;
+uniform mat4 projection;
+void main() {
+    gl_Position = projection * view * model * vec4(aPos, 1.0);
+}
+)glsl";
+
+const char* fragmentShaderSource = R"glsl(
+#version 330 core
+out vec4 FragColor;
+uniform vec4 objectColor;
+void main() {
+    FragColor = objectColor;
+}
+)glsl";
+
+// Physics constants
+const double G = 6.67430e-11;
+const double timeStep = 43200.0;     // 12 hours in seconds (0.5 Earth day)
+const double positionScale = 5e10;
+const double radiusScale = 2e7;
+const int STACKS = 30;
+const int SECTORS = 30;
+
+struct CelestialBody {
+    GLuint VAO, VBO;
+    glm::dvec3 position;
+    glm::dvec3 velocity;
+    double mass;
+    double radius;
+    glm::vec4 color;
+    size_t vertexCount;
+    bool isSun;
+
+    CelestialBody(const glm::dvec3& pos, const glm::dvec3& vel,
+                 double m, double realRadius, const glm::vec4& col, bool sun = false)
+        : position(pos), velocity(vel), mass(m), color(col), isSun(sun) {
+        radius = realRadius / radiusScale;
+        auto vertices = createSphere(radius);
+        vertexCount = vertices.size() / 3;
+        
+        glGenVertexArrays(1, &VAO);
+        glGenBuffers(1, &VBO);
+        
+        glBindVertexArray(VAO);
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+        glBindVertexArray(0);
+    }
+
+    static std::vector<float> createSphere(double radius) {
+        std::vector<float> vertices;
+        const float PI = glm::pi<float>();
+        
+        for (int i = 0; i < STACKS; ++i) {
+            float theta1 = i * PI / STACKS;
+            float theta2 = (i + 1) * PI / STACKS;
+            
+            for (int j = 0; j < SECTORS; ++j) {
+                float phi1 = j * 2 * PI / SECTORS;
+                float phi2 = (j + 1) * 2 * PI / SECTORS;
+                
+                glm::vec3 v1(radius * sin(theta1) * cos(phi1), radius * cos(theta1), radius * sin(theta1) * sin(phi1));
+                glm::vec3 v2(radius * sin(theta1) * cos(phi2), radius * cos(theta1), radius * sin(theta1) * sin(phi2));
+                glm::vec3 v3(radius * sin(theta2) * cos(phi1), radius * cos(theta2), radius * sin(theta2) * sin(phi1));
+                glm::vec3 v4(radius * sin(theta2) * cos(phi2), radius * cos(theta2), radius * sin(theta2) * sin(phi2));
+                
+                auto addVertex = [&](const glm::vec3& v) {
+                    vertices.push_back(v.x);
+                    vertices.push_back(v.y);
+                    vertices.push_back(v.z);
+                };
+                
+                addVertex(v1); addVertex(v2); addVertex(v3);
+                addVertex(v2); addVertex(v4); addVertex(v3);
+            }
+        }
+        return vertices;
+    }
+};
+
+void updatePhysics(std::vector<CelestialBody>& bodies) {
+    std::vector<glm::dvec3> newPositions(bodies.size());
+    std::vector<glm::dvec3> newVelocities(bodies.size());
+    
+    for (size_t i = 0; i < bodies.size(); ++i) {
+        if (bodies[i].isSun) {
+            newPositions[i] = glm::dvec3(0.0);
+            newVelocities[i] = glm::dvec3(0.0);
+            continue;
+        }
+        
+        glm::dvec3 netForce(0.0);
+        
+        for (size_t j = 0; j < bodies.size(); ++j) {
+            if (i == j) continue;
+            
+            glm::dvec3 r = bodies[j].position - bodies[i].position;
+            double distanceSquared = glm::dot(r, r);
+            double distance = sqrt(distanceSquared);
+            netForce += (r / distance) * (G * bodies[i].mass * bodies[j].mass / distanceSquared);
+        }
+        
+        glm::dvec3 acceleration = netForce / bodies[i].mass;
+        newVelocities[i] = bodies[i].velocity + acceleration * timeStep;
+        newPositions[i] = bodies[i].position + newVelocities[i] * timeStep;
+    }
+    
+    for (size_t i = 0; i < bodies.size(); ++i) {
+        bodies[i].position = newPositions[i];
+        bodies[i].velocity = newVelocities[i];
+    }
+}
+
+GLuint compileShader(GLenum type, const char* source) {
+    GLuint shader = glCreateShader(type);
+    glShaderSource(shader, 1, &source, nullptr);
+    glCompileShader(shader);
+    
+    GLint success;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+    if (!success) {
+        char infoLog[512];
+        glGetShaderInfoLog(shader, 512, nullptr, infoLog);
+        std::cerr << "Shader compilation error:\n" << infoLog << std::endl;
+    }
+    
+    return shader;
+}
+
+GLuint createShaderProgram() {
+    GLuint vertexShader = compileShader(GL_VERTEX_SHADER, vertexShaderSource);
+    GLuint fragmentShader = compileShader(GL_FRAGMENT_SHADER, fragmentShaderSource);
+    
+    GLuint program = glCreateProgram();
+    glAttachShader(program, vertexShader);
+    glAttachShader(program, fragmentShader);
+    glLinkProgram(program);
+    
+    GLint success;
+    glGetProgramiv(program, GL_LINK_STATUS, &success);
+    if (!success) {
+        char infoLog[512];
+        glGetProgramInfoLog(program, 512, nullptr, infoLog);
+        std::cerr << "Shader program linking error:\n" << infoLog << std::endl;
+    }
+    
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
+    
+    return program;
+}
+
+int main() {
+    if (!glfwInit()) {
+        std::cerr << "Failed to initialize GLFW" << std::endl;
+        return -1;
+    }
+    
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    
+    GLFWwindow* window = glfwCreateWindow(1280, 720, "Solar System Simulation", nullptr, nullptr);
+    if (!window) {
+        std::cerr << "Failed to create GLFW window" << std::endl;
+        glfwTerminate();
+        return -1;
+    }
+    
+    glfwMakeContextCurrent(window);
+    
+    if (glewInit() != GLEW_OK) {
+        std::cerr << "Failed to initialize GLEW" << std::endl;
+        return -1;
+    }
+    
+    glEnable(GL_DEPTH_TEST);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+
+    GLuint shaderProgram = createShaderProgram();
+    glUseProgram(shaderProgram);
+    
+    GLint modelLoc = glGetUniformLocation(shaderProgram, "model");
+    GLint viewLoc = glGetUniformLocation(shaderProgram, "view");
+    GLint projectionLoc = glGetUniformLocation(shaderProgram, "projection");
+    GLint colorLoc = glGetUniformLocation(shaderProgram, "objectColor");
+
+    struct BodyData {
+        double mass;
+        double orbitRadius;
+        double radius;
+        glm::vec4 color;
+        double inclination;
+    };
+    
+    std::vector<BodyData> solarSystemData = {
+        {1.98847e30,    0.0,        6.9634e8, {1.0f, 0.8f, 0.0f, 1.0f}, 0.0}, // Sun
+        {3.3011e23,  5.79e10,    2.4397e6, {0.8f, 0.5f, 0.2f, 1.0f}, 7.0},  // Mercury
+        {4.8675e24, 1.082e11,    6.0518e6, {0.9f, 0.7f, 0.2f, 1.0f}, 3.4},  // Venus
+        {5.9724e24, 1.496e11,    6.3710e6, {0.0f, 0.5f, 1.0f, 1.0f}, 0.0},  // Earth
+        {6.4171e23, 2.279e11,    3.3895e6, {1.0f, 0.2f, 0.1f, 1.0f}, 1.9},  // Mars
+        {1.8982e27, 7.785e11,   6.9911e7, {0.9f, 0.6f, 0.3f, 1.0f}, 1.3},  // Jupiter
+        {5.6834e26, 1.433e12,   5.8232e7, {0.9f, 0.8f, 0.5f, 1.0f}, 2.5},  // Saturn
+        {8.6810e25, 2.877e12,   2.5362e7, {0.5f, 0.8f, 0.9f, 1.0f}, 0.8},  // Uranus
+        {1.02413e26, 4.503e12,  2.4622e7, {0.3f, 0.4f, 0.9f, 1.0f}, 1.8}   // Neptune
+    };
+
+    std::vector<CelestialBody> bodies;
+    bodies.reserve(NUM_BODIES);
+    
+    // Create Sun at center with scaled radius
+    double sunScaledRadius = solarSystemData[0].radius / radiusScale;
+    bodies.emplace_back(
+        glm::dvec3(0.0),
+        glm::dvec3(0.0),
+        solarSystemData[0].mass,
+        solarSystemData[0].radius,
+        solarSystemData[0].color,
+        true
+    );
+    
+    // Create planets ensuring they start outside Sun's radius
+    for (int i = 1; i < NUM_BODIES; ++i) {
+        double inclination = glm::radians(solarSystemData[i].inclination);
+        
+        // Calculate minimum safe distance (Sun's radius + planet's radius + margin)
+        double minDistance = (solarSystemData[0].radius + solarSystemData[i].radius) * 1.5;
+        
+        // Ensure orbit radius is larger than minimum safe distance
+        double effectiveOrbitRadius = std::max(solarSystemData[i].orbitRadius, minDistance);
+        
+        glm::dvec3 position(effectiveOrbitRadius, 0.0, 0.0);
+        
+        double orbitalVelocity = sqrt(G * solarSystemData[0].mass / effectiveOrbitRadius);
+        glm::dvec3 velocity(0.0, 0.0, orbitalVelocity);
+        
+        // Apply inclination
+        glm::dmat4 rotation = glm::rotate(glm::dmat4(1.0), inclination, glm::dvec3(0.0, 0.0, 1.0));
+        position = glm::dvec3(rotation * glm::dvec4(position, 1.0));
+        velocity = glm::dvec3(rotation * glm::dvec4(velocity, 0.0));
+        
+        bodies.emplace_back(
+            position,
+            velocity,
+            solarSystemData[i].mass,
+            solarSystemData[i].radius,
+            solarSystemData[i].color
+        );
+        
+        std::cout << "Planet " << i << " created at distance: " << effectiveOrbitRadius 
+                  << " m (min safe distance: " << minDistance << " m)" << std::endl;
+    }
+
+    double maxOrbitDistance = solarSystemData.back().orbitRadius;
+    
+    // Camera setup
+    float initialCameraDistance = 2.5f * static_cast<float>(maxOrbitDistance / positionScale);
+    glm::vec3 cameraPosition(0.0f, initialCameraDistance * 0.5f, initialCameraDistance);
+    glm::vec3 cameraTarget(0.0f, 0.0f, 0.0f);
+    glm::vec3 cameraUp(0.0f, 1.0f, 0.0f);
+    
+    float nearPlane = 1.0f;
+    float farPlane = 2.0f * static_cast<float>(maxOrbitDistance / positionScale);
+    glm::mat4 projectionMatrix = glm::perspective(
+        glm::radians(45.0f),
+        1280.0f / 720.0f,
+        nearPlane,
+        farPlane
+    );
+    glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projectionMatrix));
+
+    float cameraDistance = initialCameraDistance;
+    float cameraAngle = 0.0f;
+    float cameraHeight = initialCameraDistance * 0.5f;
+    
+    while (!glfwWindowShouldClose(window)) {
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        
+        updatePhysics(bodies);
+        
+        if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) cameraDistance -= 0.1f;
+        if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) cameraDistance += 0.1f;
+        if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) cameraAngle -= 0.01f;
+        if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) cameraAngle += 0.01f;
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) cameraHeight += 0.1f;
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) cameraHeight -= 0.1f;
+        
+        cameraDistance = glm::clamp(cameraDistance, 
+                                  static_cast<float>(solarSystemData[1].orbitRadius / positionScale) * 0.5f,
+                                  farPlane * 0.9f);
+        
+        cameraPosition.x = cameraDistance * sin(cameraAngle);
+        cameraPosition.z = cameraDistance * cos(cameraAngle);
+        cameraPosition.y = cameraHeight;
+        
+        glm::mat4 viewMatrix = glm::lookAt(cameraPosition, cameraTarget, cameraUp);
+        glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(viewMatrix));
+
+        // Render all bodies
+        for (size_t i = 0; i < bodies.size(); ++i) {
+            glm::mat4 modelMatrix = glm::mat4(1.0f);
+            
+            if (!bodies[i].isSun) {
+                glm::vec3 scaledPosition = glm::vec3(bodies[i].position / positionScale);
+                modelMatrix = glm::translate(modelMatrix, scaledPosition);
+            }
+            
+            float scale;
+            if (bodies[i].isSun) {
+                float jupiterRadius = solarSystemData[5].radius / radiusScale;
+                scale = 6.0f * jupiterRadius;
+            } else {
+                scale = 1.0f;
+            }
+            modelMatrix = glm::scale(modelMatrix, glm::vec3(scale));
+            
+            glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(modelMatrix));
+            glUniform4fv(colorLoc, 1, glm::value_ptr(bodies[i].color));
+            glBindVertexArray(bodies[i].VAO);
+            glDrawArrays(GL_TRIANGLES, 0, bodies[i].vertexCount);
+        }
+
+        glfwSwapBuffers(window);
+        glfwPollEvents();
+    }
+
+    // Cleanup
+    for (auto& body : bodies) {
+        glDeleteVertexArrays(1, &body.VAO);
+        glDeleteBuffers(1, &body.VBO);
+    }
+    glDeleteProgram(shaderProgram);
+    glfwTerminate();
+    
+    return 0;
+}
