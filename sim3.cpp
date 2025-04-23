@@ -34,7 +34,7 @@ void main() {
 const double G = 6.67430e-11;
 const double timeStep = 43200.0;     // 12 hours in seconds (0.5 Earth day)
 const double positionScale = 5e10;
-const double radiusScale = 2e7;
+const double radiusScale = 1e9;
 const int STACKS = 30;
 const int SECTORS = 30;
 
@@ -227,8 +227,7 @@ int main() {
     std::vector<CelestialBody> bodies;
     bodies.reserve(NUM_BODIES);
     
-    // Create Sun at center with scaled radius
-    double sunScaledRadius = solarSystemData[0].radius / radiusScale;
+    // Create Sun at center
     bodies.emplace_back(
         glm::dvec3(0.0),
         glm::dvec3(0.0),
@@ -238,22 +237,16 @@ int main() {
         true
     );
     
-    // Create planets ensuring they start outside Sun's radius
+    // Create planets
     for (int i = 1; i < NUM_BODIES; ++i) {
         double inclination = glm::radians(solarSystemData[i].inclination);
-        
-        // Calculate minimum safe distance (Sun's radius + planet's radius + margin)
         double minDistance = (solarSystemData[0].radius + solarSystemData[i].radius) * 1.5;
-        
-        // Ensure orbit radius is larger than minimum safe distance
         double effectiveOrbitRadius = std::max(solarSystemData[i].orbitRadius, minDistance);
         
         glm::dvec3 position(effectiveOrbitRadius, 0.0, 0.0);
-        
         double orbitalVelocity = sqrt(G * solarSystemData[0].mass / effectiveOrbitRadius);
         glm::dvec3 velocity(0.0, 0.0, orbitalVelocity);
         
-        // Apply inclination
         glm::dmat4 rotation = glm::rotate(glm::dmat4(1.0), inclination, glm::dvec3(0.0, 0.0, 1.0));
         position = glm::dvec3(rotation * glm::dvec4(position, 1.0));
         velocity = glm::dvec3(rotation * glm::dvec4(velocity, 0.0));
@@ -265,16 +258,14 @@ int main() {
             solarSystemData[i].radius,
             solarSystemData[i].color
         );
-        
-        std::cout << "Planet " << i << " created at distance: " << effectiveOrbitRadius 
-                  << " m (min safe distance: " << minDistance << " m)" << std::endl;
     }
 
     double maxOrbitDistance = solarSystemData.back().orbitRadius;
     
     // Camera setup
-    float initialCameraDistance = 2.5f * static_cast<float>(maxOrbitDistance / positionScale);
-    glm::vec3 cameraPosition(0.0f, initialCameraDistance * 0.5f, initialCameraDistance);
+    float cameraDistance = 3.0f * static_cast<float>(maxOrbitDistance / positionScale);
+    float cameraAngle = 0.0f;
+    float cameraHeight = cameraDistance * 0.5f;
     glm::vec3 cameraTarget(0.0f, 0.0f, 0.0f);
     glm::vec3 cameraUp(0.0f, 1.0f, 0.0f);
     
@@ -288,32 +279,67 @@ int main() {
     );
     glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projectionMatrix));
 
-    float cameraDistance = initialCameraDistance;
-    float cameraAngle = 0.0f;
-    float cameraHeight = initialCameraDistance * 0.5f;
-    
+    // Camera control variables
+    int cameraTargetIndex = -1;  // -1 = free camera, 0-8 = follow body
+    float baseCameraDistance = cameraDistance;
+    float cameraFollowDistance = 5.0f;
+
     while (!glfwWindowShouldClose(window)) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         
         updatePhysics(bodies);
-        
-        if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) cameraDistance -= 0.1f;
-        if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) cameraDistance += 0.1f;
-        if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) cameraAngle -= 0.01f;
-        if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) cameraAngle += 0.01f;
-        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) cameraHeight += 0.1f;
-        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) cameraHeight -= 0.1f;
-        
-        cameraDistance = glm::clamp(cameraDistance, 
-                                  static_cast<float>(solarSystemData[1].orbitRadius / positionScale) * 0.5f,
-                                  farPlane * 0.9f);
-        
-        cameraPosition.x = cameraDistance * sin(cameraAngle);
-        cameraPosition.z = cameraDistance * cos(cameraAngle);
-        cameraPosition.y = cameraHeight;
-        
-        glm::mat4 viewMatrix = glm::lookAt(cameraPosition, cameraTarget, cameraUp);
-        glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(viewMatrix));
+
+        // Handle camera selection
+        for (int i = 0; i < NUM_BODIES; ++i) {
+            if (glfwGetKey(window, GLFW_KEY_1 + i) == GLFW_PRESS) {
+                cameraTargetIndex = i;
+                cameraFollowDistance = 5.0f * static_cast<float>(bodies[i].radius);
+            }
+        }
+        if (glfwGetKey(window, GLFW_KEY_0) == GLFW_PRESS) {
+            cameraTargetIndex = -1;
+        }
+
+        // Handle camera movement
+        if (cameraTargetIndex != -1) {
+            // Follow selected body
+            glm::vec3 targetPos = glm::vec3(bodies[cameraTargetIndex].position / positionScale);
+            
+            if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) cameraFollowDistance -= 0.1f;
+            if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) cameraFollowDistance += 0.1f;
+            if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) cameraAngle -= 0.01f;
+            if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) cameraAngle += 0.01f;
+            if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) cameraHeight += 0.1f;
+            if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) cameraHeight -= 0.1f;
+
+            glm::vec3 cameraPosition = targetPos + glm::vec3(
+                cameraFollowDistance * sin(cameraAngle),
+                cameraHeight,
+                cameraFollowDistance * cos(cameraAngle)
+            );
+            cameraTarget = targetPos;
+            
+            glm::mat4 viewMatrix = glm::lookAt(cameraPosition, cameraTarget, cameraUp);
+            glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(viewMatrix));
+        } else {
+            // Free camera mode
+            if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) cameraDistance -= 0.1f;
+            if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) cameraDistance += 0.1f;
+            if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) cameraAngle -= 0.01f;
+            if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) cameraAngle += 0.01f;
+            if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) cameraHeight += 0.1f;
+            if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) cameraHeight -= 0.1f;
+
+            glm::vec3 cameraPosition(
+                cameraDistance * sin(cameraAngle),
+                cameraHeight,
+                cameraDistance * cos(cameraAngle)
+            );
+            cameraTarget = glm::vec3(0.0f);
+            
+            glm::mat4 viewMatrix = glm::lookAt(cameraPosition, cameraTarget, cameraUp);
+            glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(viewMatrix));
+        }
 
         // Render all bodies
         for (size_t i = 0; i < bodies.size(); ++i) {
@@ -323,15 +349,6 @@ int main() {
                 glm::vec3 scaledPosition = glm::vec3(bodies[i].position / positionScale);
                 modelMatrix = glm::translate(modelMatrix, scaledPosition);
             }
-            
-            float scale;
-            if (bodies[i].isSun) {
-                float jupiterRadius = solarSystemData[5].radius / radiusScale;
-                scale = 6.0f * jupiterRadius;
-            } else {
-                scale = 1.0f;
-            }
-            modelMatrix = glm::scale(modelMatrix, glm::vec3(scale));
             
             glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(modelMatrix));
             glUniform4fv(colorLoc, 1, glm::value_ptr(bodies[i].color));
