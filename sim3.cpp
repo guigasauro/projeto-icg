@@ -34,7 +34,7 @@ void main() {
 const double G = 6.67430e-11;
 const double timeStep = 43200.0;     // 12 hours in seconds (0.5 Earth day)
 const double positionScale = 5e10;
-const double radiusScale = 1e9;
+const double radiusScale = 1e7;
 const int STACKS = 30;
 const int SECTORS = 30;
 
@@ -213,15 +213,15 @@ int main() {
     };
     
     std::vector<BodyData> solarSystemData = {
-        {1.98847e30,    0.0,        6.9634e8, {1.0f, 0.8f, 0.0f, 1.0f}, 0.0}, // Sun
-        {3.3011e23,  5.79e10,    2.4397e6, {0.8f, 0.5f, 0.2f, 1.0f}, 7.0},  // Mercury
-        {4.8675e24, 1.082e11,    6.0518e6, {0.9f, 0.7f, 0.2f, 1.0f}, 3.4},  // Venus
-        {5.9724e24, 1.496e11,    6.3710e6, {0.0f, 0.5f, 1.0f, 1.0f}, 0.0},  // Earth
-        {6.4171e23, 2.279e11,    3.3895e6, {1.0f, 0.2f, 0.1f, 1.0f}, 1.9},  // Mars
-        {1.8982e27, 7.785e11,   6.9911e7, {0.9f, 0.6f, 0.3f, 1.0f}, 1.3},  // Jupiter
-        {5.6834e26, 1.433e12,   5.8232e7, {0.9f, 0.8f, 0.5f, 1.0f}, 2.5},  // Saturn
-        {8.6810e25, 2.877e12,   2.5362e7, {0.5f, 0.8f, 0.9f, 1.0f}, 0.8},  // Uranus
-        {1.02413e26, 4.503e12,  2.4622e7, {0.3f, 0.4f, 0.9f, 1.0f}, 1.8}   // Neptune
+        {1.98847e30,    0.0,        7.9634e7, {1.0f, 0.8f, 0.0f, 1.0f}, 0.0}, // Sun
+        {3.3011e23,  5.4e11,    2.4397e5, {0.8f, 0.5f, 0.2f, 1.0f}, 7.0},  // Mercury
+        {4.8675e24, 7e11,    6.0518e5, {0.9f, 0.7f, 0.2f, 1.0f}, 3.4},  // Venus
+        {5.9724e24, 11e11,    6.3710e5, {0.0f, 0.5f, 1.0f, 1.0f}, 0.0},  // Earth
+        {6.4171e23, 15e11,    3.3895e5, {1.0f, 0.2f, 0.1f, 1.0f}, 1.9},  // Mars
+        {1.8982e27, 23e11,   1e7, {0.9f, 0.6f, 0.3f, 1.0f}, 1.3},  // Jupiter
+        {5.6834e26, 28e11,   4.8232e6, {0.9f, 0.8f, 0.5f, 1.0f}, 2.5},  // Saturn
+        {8.6810e25, 37e11,   2.5362e6, {0.5f, 0.8f, 0.9f, 1.0f}, 0.8},  // Uranus
+        {1.02413e26, 4.503e12,  2.4622e6, {0.3f, 0.4f, 0.9f, 1.0f}, 1.8}   // Neptune
     };
 
     std::vector<CelestialBody> bodies;
