@@ -31,10 +31,10 @@
 
 - ### Execução do código
   
-  <code>g++ sim3.cpp -o sim3 -lGLEW -lglfw -lGL -lGLU & ./sim3</code>
+  <code>g++ sim3.cpp -o sim3 -lGLEW -lglfw -lGL -lGLU && ./sim3</code>
 
 ## Controles
 
-- Números de 1 a 0: Visão centralizada dos astros, do Sol a Netuno, respectivamente
+- Números de 1 a 9: Visão centralizada dos astros, do Sol a Netuno, respectivamente
 - W: Zoom out
 - S: Zoom in
