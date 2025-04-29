@@ -13,20 +13,62 @@ const int NUM_BODIES = 9;
 const char* vertexShaderSource = R"glsl(
 #version 330 core
 layout(location=0) in vec3 aPos;
+layout(location=1) in vec3 aNormal;  // Adicionado: normais para iluminação
+
 uniform mat4 model;
 uniform mat4 view;
 uniform mat4 projection;
+
+out vec3 FragPos;
+out vec3 Normal;
+
 void main() {
-    gl_Position = projection * view * model * vec4(aPos, 1.0);
+    FragPos = vec3(model * vec4(aPos, 1.0));
+    Normal = mat3(transpose(inverse(model))) * aNormal;  // Transforma normais para espaço de mundo
+    gl_Position = projection * view * vec4(FragPos, 1.0);
 }
 )glsl";
 
 const char* fragmentShaderSource = R"glsl(
 #version 330 core
+in vec3 FragPos;
+in vec3 Normal;
+
 out vec4 FragColor;
+
 uniform vec4 objectColor;
+uniform bool isSun;          // Identifica se é o Sol
+uniform vec3 lightPos;       // Posição da luz (Sol)
+uniform vec3 lightColor;     // Cor da luz (branca)
+uniform vec3 viewPos;        // Posição da câmera
+
 void main() {
-    FragColor = objectColor;
+    if (isSun) {
+        // Efeito de emissão para o Sol (brilho próprio)
+        FragColor = vec4(objectColor.rgb * 2.0, objectColor.a);  // Intensidade aumentada
+        return;
+    }
+
+    // Iluminação Phong para planetas
+    vec3 norm = normalize(Normal);
+    vec3 lightDir = normalize(lightPos - FragPos);
+    vec3 viewDir = normalize(viewPos - FragPos);
+    vec3 reflectDir = reflect(-lightDir, norm);
+
+    // Componentes da iluminação
+    float ambientStrength = 0.1;
+    vec3 ambient = ambientStrength * lightColor;
+
+    float diff = max(dot(norm, lightDir), 0.0);
+    vec3 diffuse = diff * lightColor;
+
+    float specularStrength = 0.5;
+    float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32);
+    vec3 specular = specularStrength * spec * lightColor;
+
+    // Combina as componentes
+    vec3 result = (ambient + diffuse + specular) * objectColor.rgb;
+    FragColor = vec4(result, objectColor.a);
 }
 )glsl";
 
@@ -34,7 +76,7 @@ void main() {
 const double G = 6.67430e-11;
 const double timeStep = 43200.0;     // 12 hours in seconds (0.5 Earth day)
 const double positionScale = 5e10;
-const double radiusScale = 1e7;
+const double radiusScale = 150;
 const int STACKS = 30;
 const int SECTORS = 30;
 
@@ -51,7 +93,7 @@ struct CelestialBody {
     CelestialBody(const glm::dvec3& pos, const glm::dvec3& vel,
                  double m, double realRadius, const glm::vec4& col, bool sun = false)
         : position(pos), velocity(vel), mass(m), color(col), isSun(sun) {
-        radius = realRadius / radiusScale;
+        radius = std::cbrt(realRadius) / radiusScale;
         auto vertices = createSphere(radius);
         vertexCount = vertices.size() / 3;
         
@@ -61,8 +103,13 @@ struct CelestialBody {
         glBindVertexArray(VAO);
         glBindBuffer(GL_ARRAY_BUFFER, VBO);
         glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
+
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
         glEnableVertexAttribArray(0);
+
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+        glEnableVertexAttribArray(1);
+
         glBindVertexArray(0);
     }
 
@@ -84,9 +131,15 @@ struct CelestialBody {
                 glm::vec3 v4(radius * sin(theta2) * cos(phi2), radius * cos(theta2), radius * sin(theta2) * sin(phi2));
                 
                 auto addVertex = [&](const glm::vec3& v) {
+
+                    glm::vec3 n = glm::normalize(v);
                     vertices.push_back(v.x);
                     vertices.push_back(v.y);
                     vertices.push_back(v.z);
+
+                    vertices.push_back(n.x);
+                    vertices.push_back(n.y);
+                    vertices.push_back(n.z);
                 };
                 
                 addVertex(v1); addVertex(v2); addVertex(v3);
@@ -280,7 +333,7 @@ int main() {
     glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projectionMatrix));
 
     // Camera control variables
-    int cameraTargetIndex = -1;  // -1 = free camera, 0-8 = follow body
+    int cameraTargetIndex = 0;  // -1 = free camera, 0-8 = follow body
     float baseCameraDistance = cameraDistance;
     float cameraFollowDistance = 5.0f;
 
@@ -300,6 +353,12 @@ int main() {
             cameraTargetIndex = -1;
         }
 
+        glm::vec3 cameraPosition(
+            cameraDistance * sin(cameraAngle),
+            cameraHeight,
+            cameraDistance * cos(cameraAngle)
+        );
+
         // Handle camera movement
         if (cameraTargetIndex != -1) {
             // Follow selected body
@@ -312,7 +371,7 @@ int main() {
             if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) cameraHeight += 0.1f;
             if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) cameraHeight -= 0.1f;
 
-            glm::vec3 cameraPosition = targetPos + glm::vec3(
+            cameraPosition = targetPos + glm::vec3(
                 cameraFollowDistance * sin(cameraAngle),
                 cameraHeight,
                 cameraFollowDistance * cos(cameraAngle)
@@ -329,17 +388,16 @@ int main() {
             if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) cameraAngle += 0.01f;
             if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) cameraHeight += 0.1f;
             if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) cameraHeight -= 0.1f;
-
-            glm::vec3 cameraPosition(
-                cameraDistance * sin(cameraAngle),
-                cameraHeight,
-                cameraDistance * cos(cameraAngle)
-            );
+            
             cameraTarget = glm::vec3(0.0f);
             
             glm::mat4 viewMatrix = glm::lookAt(cameraPosition, cameraTarget, cameraUp);
             glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(viewMatrix));
         }
+
+        glUniform3fv(glGetUniformLocation(shaderProgram, "lightPos"), 1, glm::value_ptr(glm::vec3(0.0f)));
+        glUniform3fv(glGetUniformLocation(shaderProgram, "lightColor"), 1, glm::value_ptr(glm::vec3(1.0f)));  // Luz branca
+        glUniform3fv(glGetUniformLocation(shaderProgram, "viewPos"), 1, glm::value_ptr(cameraPosition));  // Posição da câmera
 
         // Render all bodies
         for (size_t i = 0; i < bodies.size(); ++i) {
@@ -352,6 +410,9 @@ int main() {
             
             glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(modelMatrix));
             glUniform4fv(colorLoc, 1, glm::value_ptr(bodies[i].color));
+
+            glUniform1i(glGetUniformLocation(shaderProgram, "isSun"), bodies[i].isSun);
+
             glBindVertexArray(bodies[i].VAO);
             glDrawArrays(GL_TRIANGLES, 0, bodies[i].vertexCount);
         }
