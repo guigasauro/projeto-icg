@@ -299,6 +299,7 @@ int main() {
         return -1;
     }
     
+    
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -319,6 +320,8 @@ int main() {
     }
     
     glEnable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
     GLuint backgroundTexture;
@@ -418,12 +421,12 @@ int main() {
     
 
     // Crie os anéis de Saturno
-    double ringInner = 5e6 / radiusScale; 
-    double ringOuter = 1.2e7 / radiusScale;
+    double ringInner = 7e6 / radiusScale; 
+    double ringOuter = 1.1e7 / radiusScale;
     std::vector<float> ringVertices = createTorusRing(
         (ringInner + ringOuter)/2.0,  // Raio principal
         (ringOuter - ringInner)/2.0,  // Raio do tubo
-        100,  // Segmentos principais
+        10000,  // Segmentos principais
         2    // Segmentos do tubo
     );
     int ringVertexCount = ringVertices.size() / 5;
@@ -434,7 +437,7 @@ int main() {
     glBindTexture(GL_TEXTURE_2D, ringTexture);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     
     int width, height, nrChannels;
@@ -584,11 +587,9 @@ int main() {
         glm::mat4 ringModel = glm::mat4(1.0f);
         glm::vec3 satPos = glm::vec3(bodies[6].position / positionScale);
         ringModel = glm::translate(ringModel, satPos);
-        ringModel = glm::rotate(ringModel, glm::radians(27.0f), glm::vec3(0,0,1)); // Inclinação de Saturno
+        ringModel = glm::rotate(ringModel, glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f)); // Inclinação de Saturno
+        ringModel = glm::rotate(ringModel, glm::radians(-26.73f), glm::vec3(0.0f, 0.0f, 1.0f)); // Inclinação axial de Saturno (26.73°)
         glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(ringModel));
-
-        glBindVertexArray(ringVAO);
-        glDrawArrays(GL_TRIANGLES, 0, ringVertexCount);
         
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, ringTexture);
