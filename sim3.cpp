@@ -16,11 +16,21 @@ const char* vertexShaderSource = R"glsl(
 #version 330 core
 layout(location=0) in vec3 aPos;
 layout(location=1) in vec2 aTexCoord;
+layout(location=2) in vec3 aNormal;
+
+
 out vec2 TexCoord;
+out vec3 FragPos;
+out vec3 Normal;
+
 uniform mat4 model;
 uniform mat4 view;
 uniform mat4 projection;
+
 void main() {
+    FragPos = vec3(model * vec4(aPos, 1.0));
+    Normal = mat3(transpose(inverse(model))) * aNormal;
+
     gl_Position = projection * view * model * vec4(aPos, 1.0);
     TexCoord = aTexCoord;
 }
@@ -29,19 +39,50 @@ void main() {
 const char* fragmentShaderSource = R"glsl(
 #version 330 core
 out vec4 FragColor;
+
 in vec2 TexCoord;
+in vec3 FragPos;
+in vec3 Normal;
+
 uniform sampler2D texture1;
+uniform bool isSun;
+uniform vec3 lightPos;
+uniform vec3 lightColor;
+uniform vec3 viewPos;
+
 void main() {
-    FragColor = texture(texture1, TexCoord);
+    if(isSun){
+        FragColor = texture(texture1, TexCoord) * vec4(2.0, 2.0, 1.5, 1.0);
+        return; 
+    }
+
+    vec3 norm = normalize(Normal);
+    vec3 lightDir = normalize(lightPos - FragPos);
+    vec3 viewDir = normalize(viewPos - FragPos);
+    vec3 reflectDir = reflect(-lightDir, norm);
+
+    float ambientStrength = 0.1;
+    vec3 ambient = ambientStrength * lightColor;
+
+    float diff = max(dot(norm, lightDir), 0.0);
+    vec3 diffuse = diff * lightColor;
+
+    float specularStrength = 0.5;
+    float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32);
+    vec3 specular = specularStrength * spec * lightColor;
+
+    vec3 texColor = texture(texture1, TexCoord).rgb;
+    vec3 result = (ambient + diffuse + specular) * texColor;
+    FragColor = vec4(result, 1.0);
 }
 )glsl";
 
 
 // Physics constants
 const double G = 6.67430e-11;
-const double timeStep = 432000.0;     // 12 hours in seconds (0.5 Earth day)
+const double timeStep = 43200.0;     // 12 hours in seconds (0.5 Earth day)
 const double positionScale = 5e10;
-const double radiusScale = 1e7;
+const double radiusScale = 120;
 const int STACKS = 30;
 const int SECTORS = 30;
 
@@ -80,9 +121,9 @@ struct CelestialBody {
                 const char* textureFile, bool sun = false)
         : position(pos), velocity(vel), mass(m), isSun(sun) {
         
-        radius = realRadius / radiusScale;
+        radius = std::cbrt(realRadius) / radiusScale;
         auto vertices = createSphere(radius);
-        vertexCount = vertices.size() / 5;  // 5 floats per vertex (position + texture)
+        vertexCount = vertices.size() / 8;  // 5 floats per vertex (position + texture)
         
         // Load texture
         glGenTextures(1, &textureID);
@@ -113,12 +154,15 @@ struct CelestialBody {
         glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
         
         // Position attribute
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
         glEnableVertexAttribArray(0);
         
         // Texture coordinate attribute
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
         glEnableVertexAttribArray(1);
+
+        glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(5 * sizeof(float)));
+        glEnableVertexAttribArray(2);
         
         glBindVertexArray(0);
     }
@@ -141,6 +185,8 @@ struct CelestialBody {
                         radius * cos(theta),
                         radius * sin(theta) * sin(phi)
                     );
+
+                    glm::vec3 normal = glm::normalize(pos);
                     // Texture coordinates
                     float u = phi / (2 * PI);
                     float v = 1.0f - theta / PI;
@@ -150,6 +196,9 @@ struct CelestialBody {
                     vertices.push_back(pos.z);
                     vertices.push_back(u);
                     vertices.push_back(v);
+                    vertices.push_back(normal.x);
+                    vertices.push_back(normal.y);
+                    vertices.push_back(normal.z);
                 };
                 
                 // Triangle 1
@@ -486,6 +535,17 @@ int main() {
     float baseCameraDistance = cameraDistance;
     float cameraFollowDistance = 5.0f;
 
+    glm::vec3 cameraPosition(
+        cameraDistance * sin(cameraAngle),
+        cameraHeight,
+        cameraDistance * cos(cameraAngle)
+    );
+
+    // Configura a luz (posição do Sol)
+    glUniform3fv(glGetUniformLocation(shaderProgram, "lightPos"), 1, glm::value_ptr(glm::vec3(0.0f)));
+    glUniform3fv(glGetUniformLocation(shaderProgram, "lightColor"), 1, glm::value_ptr(glm::vec3(1.0f, 0.9f, 0.7f)));  // Luz amarelada
+    glUniform3fv(glGetUniformLocation(shaderProgram, "viewPos"), 1, glm::value_ptr(cameraPosition));
+
     while (!glfwWindowShouldClose(window)) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         
@@ -515,7 +575,7 @@ int main() {
             if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) cameraHeight += 0.1f;
             if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) cameraHeight -= 0.1f;
 
-            glm::vec3 cameraPosition = targetPos + glm::vec3(
+            cameraPosition = targetPos + glm::vec3(
                 cameraFollowDistance * sin(cameraAngle),
                 cameraHeight,
                 cameraFollowDistance * cos(cameraAngle)
@@ -533,11 +593,6 @@ int main() {
             if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) cameraHeight += 0.1f;
             if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) cameraHeight -= 0.1f;
 
-            glm::vec3 cameraPosition(
-                cameraDistance * sin(cameraAngle),
-                cameraHeight,
-                cameraDistance * cos(cameraAngle)
-            );
             cameraTarget = glm::vec3(0.0f);
             
             viewMatrix = glm::lookAt(cameraPosition, cameraTarget, cameraUp);
@@ -576,6 +631,7 @@ int main() {
             
             glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(modelMatrix));
             glActiveTexture(GL_TEXTURE0);
+            glUniform1i(glGetUniformLocation(shaderProgram, "isSun"), bodies[i].isSun);
             glBindTexture(GL_TEXTURE_2D, bodies[i].textureID);
             glBindVertexArray(bodies[i].VAO);
             glDrawArrays(GL_TRIANGLES, 0, bodies[i].vertexCount);
