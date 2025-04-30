@@ -531,7 +531,7 @@ int main() {
     glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projectionMatrix));
 
     // Camera control variables
-    int cameraTargetIndex = -1;  // -1 = free camera, 0-8 = follow body
+    int cameraTargetIndex = 0;  // -1 = free camera, 0-8 = follow body
     float baseCameraDistance = cameraDistance;
     float cameraFollowDistance = 5.0f;
 
