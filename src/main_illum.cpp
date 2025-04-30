@@ -26,12 +26,17 @@ int main() {
         return -1;
     }
     
+    // Habilita teste de profundidade (Z-buffer)
     glEnable(GL_DEPTH_TEST);
+
+    // Define cor de fundo padrão (preto)
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
+    // Compila e linka os shaders (vertex e fragment)
     GLuint shaderProgram = createShaderProgram();
     glUseProgram(shaderProgram);
     
+    // Obtém localizações dos uniforms (model, view, projection, etc.)
     GLint modelLoc = glGetUniformLocation(shaderProgram, "model");
     GLint viewLoc = glGetUniformLocation(shaderProgram, "view");
     GLint projectionLoc = glGetUniformLocation(shaderProgram, "projection");
@@ -40,7 +45,7 @@ int main() {
     std::vector<CelestialBody> bodies;
     bodies.reserve(NUM_BODIES);
     
-    // Create Sun at center
+    // Criação do Sol no centro
     bodies.emplace_back(
         glm::dvec3(0.0),
         glm::dvec3(0.0),
@@ -51,7 +56,7 @@ int main() {
         true
     );
     
-    // Create planets
+    // Criação dos planetas e definição no vetor bodies
     for (int i = 1; i < NUM_BODIES; ++i) {
         double inclination = glm::radians(solarSystemData[i].inclination);
         double minDistance = (solarSystemData[0].radius + solarSystemData[i].radius) * 1.5;
@@ -75,51 +80,7 @@ int main() {
         );
     }
 
-    // Crie os anéis de Saturno
-    double ringInner = 7e6 / radiusScale; 
-    double ringOuter = 1.1e7 / radiusScale;
-    std::vector<float> ringVertices = createTorusRing(
-        (ringInner + ringOuter)/2.0,  // Raio principal
-        (ringOuter - ringInner)/2.0,  // Raio do tubo
-        10000,  // Segmentos principais
-        2    // Segmentos do tubo
-    );
-    int ringVertexCount = ringVertices.size() / 5;
-    
-    // Carregue a textura dos anéis
-    GLuint ringTexture;
-    glGenTextures(1, &ringTexture);
-    glBindTexture(GL_TEXTURE_2D, ringTexture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    
-    int width, height, nrChannels;
-    unsigned char* data = stbi_load("assets/2k_saturn_ring_alpha.png", &width, &height, &nrChannels, 0);
-    if (data) {
-        GLenum format = (nrChannels == 4) ? GL_RGBA : GL_RGB;
-        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
-        glGenerateMipmap(GL_TEXTURE_2D);
-    }
-    stbi_image_free(data);
-        
-    GLuint ringVAO, ringVBO;
-    glGenVertexArrays(1, &ringVAO);
-    glGenBuffers(1, &ringVBO);
-
-    glBindVertexArray(ringVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, ringVBO);
-    glBufferData(GL_ARRAY_BUFFER, ringVertices.size() * sizeof(float), ringVertices.data(), GL_STATIC_DRAW);
-
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-
-    glBindVertexArray(0);
-
+    // Definição da distância máxima para setup da câmera
     double maxOrbitDistance = solarSystemData.back().orbitRadius;
     
     // Camera setup
@@ -139,8 +100,8 @@ int main() {
     );
     glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projectionMatrix));
 
-    // Camera control variables
-    int cameraTargetIndex = 0;  // -1 = free camera, 0-8 = follow body
+    // Controle de câmera
+    int cameraTargetIndex = 0;  // 0-9 = Segue um corpo
     float baseCameraDistance = cameraDistance;
     float cameraFollowDistance = 5.0f;
 
@@ -229,18 +190,6 @@ int main() {
             glDrawArrays(GL_TRIANGLES, 0, bodies[i].vertexCount);
         }
 
-        glm::mat4 ringModel = glm::mat4(1.0f);
-        glm::vec3 satPos = glm::vec3(bodies[6].position / positionScale);
-        ringModel = glm::translate(ringModel, satPos);
-        ringModel = glm::rotate(ringModel, glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f)); // Inclinação de Saturno
-        ringModel = glm::rotate(ringModel, glm::radians(-26.73f), glm::vec3(0.0f, 0.0f, 1.0f)); // Inclinação axial de Saturno (26.73°)
-        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(ringModel));
-        
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, ringTexture);
-        glBindVertexArray(ringVAO);
-        glDrawArrays(GL_TRIANGLES, 0, ringVertexCount);
-
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
@@ -249,15 +198,8 @@ int main() {
     for (auto& body : bodies) {
         glDeleteVertexArrays(1, &body.VAO);
         glDeleteBuffers(1, &body.VBO);
-        glDeleteTextures(1, &body.textureID);
     }
-    glDeleteVertexArrays(1, &ringVAO);
-    glDeleteBuffers(1, &ringVBO);
-    glDeleteTextures(1, &ringTexture);
-
     glDeleteProgram(shaderProgram);
-
-    // Encerra GLFW
     glfwTerminate();
     
     return 0;

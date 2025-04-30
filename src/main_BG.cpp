@@ -28,11 +28,16 @@ int main() {
         return -1;
     }
     
+    // Habilita teste de profundidade (Z-buffer)
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    // Define cor de fundo padrão (preto)
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
+
+    // Carrega textura do céu estrelado (2k_stars.jpg)
     GLuint backgroundTexture;
     glGenTextures(1, &backgroundTexture);
     glBindTexture(GL_TEXTURE_2D, backgroundTexture);
@@ -65,6 +70,7 @@ int main() {
         1.0f,  1.0f, 1.0f, 1.0f, 1.0f
     };
 
+    // Configura VAO/VBO para o quad de fundo
     GLuint quadVAO, quadVBO;
     glGenVertexArrays(1, &quadVAO);
     glGenBuffers(1, &quadVBO);
@@ -81,10 +87,11 @@ int main() {
 
 
     
-
+    // Compila e linka os shaders (vertex e fragment)
     GLuint shaderProgram = createShaderProgram();
     glUseProgram(shaderProgram);
     
+    // Obtém localizações dos uniforms (model, view, projection, etc.)
     GLint modelLoc = glGetUniformLocation(shaderProgram, "model");
     GLint viewLoc = glGetUniformLocation(shaderProgram, "view");
     GLint projectionLoc = glGetUniformLocation(shaderProgram, "projection");
@@ -93,7 +100,7 @@ int main() {
     std::vector<CelestialBody> bodies;
     bodies.reserve(NUM_BODIES);
     
-    // Create Sun at center
+    // Criação do Sol no centro
     bodies.emplace_back(
         glm::dvec3(0.0),
         glm::dvec3(0.0),
@@ -104,7 +111,7 @@ int main() {
         true
     );
     
-    // Create planets
+    // Criação dos planetas e definição no vetor bodies
     for (int i = 1; i < NUM_BODIES; ++i) {
         double inclination = glm::radians(solarSystemData[i].inclination);
         double minDistance = (solarSystemData[0].radius + solarSystemData[i].radius) * 1.5;
@@ -140,7 +147,7 @@ int main() {
     );
     int ringVertexCount = ringVertices.size() / 5;
     
-    // Carregue a textura dos anéis
+    // Carrega a textura dos anéis
     GLuint ringTexture;
     glGenTextures(1, &ringTexture);
     glBindTexture(GL_TEXTURE_2D, ringTexture);
@@ -157,7 +164,8 @@ int main() {
         glGenerateMipmap(GL_TEXTURE_2D);
     }
     stbi_image_free(data);
-        
+    
+    // Configura VAO/VBO específicos para os anéis
     GLuint ringVAO, ringVBO;
     glGenVertexArrays(1, &ringVAO);
     glGenBuffers(1, &ringVBO);
@@ -174,6 +182,7 @@ int main() {
 
     glBindVertexArray(0);
 
+    // Definição da distância máxima para setup da câmera
     double maxOrbitDistance = solarSystemData.back().orbitRadius;
     
     // Camera setup
@@ -193,14 +202,15 @@ int main() {
     );
     glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projectionMatrix));
 
-    // Camera control variables
-    int cameraTargetIndex = 0;  // -1 = free camera, 0-8 = follow body
+    // Controle de câmera
+    int cameraTargetIndex = 0;  // 0-9 = Segue um corpo
     float baseCameraDistance = cameraDistance;
     float cameraFollowDistance = 5.0f;
 
     while (!glfwWindowShouldClose(window)) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         
+        // Atualiza física (posições e velocidades dos corpos)
         updatePhysics(bodies);
 
         // Handle camera selection
@@ -276,7 +286,7 @@ int main() {
         glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(viewMatrix));
         glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projectionMatrix));
 
-        // Render all bodies
+        // Renderiza planetas e Sol (com iluminação e texturas)
         glUniform1i(textureLoc, 0);  // Use texture unit 0
         for (size_t i = 0; i < bodies.size(); ++i) {
             glm::mat4 modelMatrix = glm::mat4(1.0f);
@@ -309,7 +319,7 @@ int main() {
         glfwPollEvents();
     }
 
-    // Cleanup
+    // Libera buffers, texturas e shaders
     for (auto& body : bodies) {
         glDeleteVertexArrays(1, &body.VAO);
         glDeleteBuffers(1, &body.VBO);
