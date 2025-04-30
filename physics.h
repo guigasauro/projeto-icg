@@ -23,15 +23,15 @@ struct BodyData {
 };
 
 std::vector<BodyData> solarSystemData = {
-    {1.98847e30,    0.0,        7.9634e7, {1.0f, 0.8f, 0.0f, 1.0f}, 0.0, "2k_sun.jpg"},
-    {3.3011e23,  5.4e11,    2.4397e5, {0.8f, 0.5f, 0.2f, 1.0f}, 7.0, "2k_mercury.jpg"},
-    {4.8675e24, 7e11,    6.0518e5, {0.9f, 0.7f, 0.2f, 1.0f}, 3.4, "2k_venus_surface.jpg"},
-    {5.9724e24, 11e11,    6.3710e5, {0.0f, 0.5f, 1.0f, 1.0f}, 0.0, "2k_earth_daymap.jpg"},
-    {6.4171e23, 15e11,    3.3895e5, {1.0f, 0.2f, 0.1f, 1.0f}, 1.9, "2k_mars.jpg"},
-    {1.8982e27, 23e11,   1e7, {0.9f, 0.6f, 0.3f, 1.0f}, 1.3, "2k_jupiter.jpg"},
-    {5.6834e26, 28e11,   4.8232e6, {0.9f, 0.8f, 0.5f, 1.0f}, 2.5, "2k_saturn.jpg"},
-    {8.6810e25, 37e11,   2.5362e6, {0.5f, 0.8f, 0.9f, 1.0f}, 0.8, "2k_uranus.jpg"},
-    {1.02413e26, 4.503e12,  2.4622e6, {0.3f, 0.4f, 0.9f, 1.0f}, 1.8, "2k_neptune.jpg"}
+    {1.98847e30,    0.0,        7.9634e7, {1.0f, 0.8f, 0.0f, 1.0f}, 0.0, "assets/2k_sun.jpg"},
+    {3.3011e23,  5.4e11,    2.4397e5, {0.8f, 0.5f, 0.2f, 1.0f}, 7.0, "assets/2k_mercury.jpg"},
+    {4.8675e24, 7e11,    6.0518e5, {0.9f, 0.7f, 0.2f, 1.0f}, 3.4, "assets/2k_venus_surface.jpg"},
+    {5.9724e24, 11e11,    6.3710e5, {0.0f, 0.5f, 1.0f, 1.0f}, 0.0, "assets/2k_earth_daymap.jpg"},
+    {6.4171e23, 15e11,    3.3895e5, {1.0f, 0.2f, 0.1f, 1.0f}, 1.9, "assets/2k_mars.jpg"},
+    {1.8982e27, 23e11,   1e7, {0.9f, 0.6f, 0.3f, 1.0f}, 1.3, "assets/2k_jupiter.jpg"},
+    {5.6834e26, 28e11,   4.8232e6, {0.9f, 0.8f, 0.5f, 1.0f}, 2.5, "assets/2k_saturn.jpg"},
+    {8.6810e25, 37e11,   2.5362e6, {0.5f, 0.8f, 0.9f, 1.0f}, 0.8, "assets/2k_uranus.jpg"},
+    {1.02413e26, 4.503e12,  2.4622e6, {0.3f, 0.4f, 0.9f, 1.0f}, 1.8, "assets/2k_neptune.jpg"}
 };
 
 struct CelestialBody {

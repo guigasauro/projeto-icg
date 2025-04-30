@@ -41,7 +41,7 @@ int main() {
 
     int bgWidth, bgHeight, bgChannels;
     stbi_set_flip_vertically_on_load(true);
-    unsigned char* bgData = stbi_load("2k_stars.jpg", &bgWidth, &bgHeight, &bgChannels, 0);
+    unsigned char* bgData = stbi_load("assets/2k_stars.jpg", &bgWidth, &bgHeight, &bgChannels, 0);
     if (bgData) {
         GLenum format = (bgChannels == 4) ? GL_RGBA : GL_RGB;
         glTexImage2D(GL_TEXTURE_2D, 0, format, bgWidth, bgHeight, 0, format, GL_UNSIGNED_BYTE, bgData);
@@ -144,7 +144,7 @@ int main() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     
     int width, height, nrChannels;
-    unsigned char* data = stbi_load("2k_saturn_ring_alpha.png", &width, &height, &nrChannels, 0);
+    unsigned char* data = stbi_load("assets/2k_saturn_ring_alpha.png", &width, &height, &nrChannels, 0);
     if (data) {
         GLenum format = (nrChannels == 4) ? GL_RGBA : GL_RGB;
         glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
