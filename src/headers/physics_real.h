@@ -5,7 +5,7 @@
 const int NUM_BODIES = 9;
 
 
-// Physics constants
+// Constantes
 const double G = 6.67430e-11;
 const double timeStep = 43200.0;
 const double positionScale = 5e10;
@@ -13,6 +13,7 @@ const double radiusScale = 1e7;
 const int STACKS = 30;
 const int SECTORS = 30;
 
+// Struct de definição para o vetor solarSystemData
 struct BodyData {
     double mass;
     double orbitRadius;
@@ -23,6 +24,7 @@ struct BodyData {
 };
 
 std::vector<BodyData> solarSystemData = {
+    //massa,   raio de órbita, raio do planeta,  vetor de cor,   inclinação e textura
     {1.98847e30,    0.0,        7.9634e7, {1.0f, 0.8f, 0.0f, 1.0f}, 0.0, "assets/2k_sun.jpg"},
     {3.3011e23,  5.4e11,    2.4397e5, {0.8f, 0.5f, 0.2f, 1.0f}, 7.0, "assets/2k_mercury.jpg"},
     {4.8675e24, 7e11,    6.0518e5, {0.9f, 0.7f, 0.2f, 1.0f}, 3.4, "assets/2k_venus_surface.jpg"},
@@ -34,6 +36,7 @@ std::vector<BodyData> solarSystemData = {
     {1.02413e26, 4.503e12,  2.4622e6, {0.3f, 0.4f, 0.9f, 1.0f}, 1.8, "assets/2k_neptune.jpg"}
 };
 
+// Struct de definição do corpo celeste
 struct CelestialBody {
     GLuint VAO, VBO, textureID;
     glm::dvec3 position;
@@ -43,6 +46,7 @@ struct CelestialBody {
     size_t vertexCount;
     bool isSun;
 
+    // Construtor
     CelestialBody(const glm::dvec3& pos, const glm::dvec3& vel, double m, double realRadius,
         const glm::vec4& col,const char* textureFile, bool sun = false)
         : position(pos), velocity(vel), mass(m), isSun(sun) {
@@ -51,7 +55,7 @@ struct CelestialBody {
         auto vertices = createSphere(radius);
         vertexCount = vertices.size() / 5;  // 5 floats per vertex (position + texture)
         
-        // Load texture
+        // Carregamento das texturas
         glGenTextures(1, &textureID);
         glBindTexture(GL_TEXTURE_2D, textureID);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
@@ -71,7 +75,7 @@ struct CelestialBody {
         }
         stbi_image_free(data);
 
-        // Set up vertex data and buffers
+        // Criação de dados do vértice e dos buffers
         glGenVertexArrays(1, &VAO);
         glGenBuffers(1, &VBO);
         
@@ -79,17 +83,18 @@ struct CelestialBody {
         glBindBuffer(GL_ARRAY_BUFFER, VBO);
         glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
         
-        // Position attribute
+        // Atributo de posição
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
         glEnableVertexAttribArray(0);
         
-        // Texture coordinate attribute
+        // Atributo de coordenada da textura
         glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
         glEnableVertexAttribArray(1);
         
         glBindVertexArray(0);
     }
 
+    // Método para criação da esfera
     static std::vector<float> createSphere(double radius) {
         std::vector<float> vertices;
         const float PI = glm::pi<float>();
@@ -108,7 +113,7 @@ struct CelestialBody {
                         radius * cos(theta),
                         radius * sin(theta) * sin(phi)
                     );
-                    // Texture coordinates
+                    // Coordenadas de textura
                     float u = phi / (2 * PI);
                     float v = 1.0f - theta / PI;
                     
@@ -134,11 +139,13 @@ struct CelestialBody {
     }
 };
 
+//Método para atualizar as medidas de velocidade e posição dos astros durante a simulação
 void updatePhysics(std::vector<CelestialBody>& bodies) {
     std::vector<glm::dvec3> newPositions(bodies.size());
     std::vector<glm::dvec3> newVelocities(bodies.size());
     
     for (size_t i = 0; i < bodies.size(); ++i) {
+        //Cálculo da aceleração e velocidade do Sol = 0.0
         if (bodies[i].isSun) {
             newPositions[i] = glm::dvec3(0.0);
             newVelocities[i] = glm::dvec3(0.0);
@@ -147,6 +154,7 @@ void updatePhysics(std::vector<CelestialBody>& bodies) {
         
         glm::dvec3 netForce(0.0);
         
+        //Cálculo dos outros planetas
         for (size_t j = 0; j < bodies.size(); ++j) {
             if (i == j) continue;
             
@@ -161,12 +169,14 @@ void updatePhysics(std::vector<CelestialBody>& bodies) {
         newPositions[i] = bodies[i].position + newVelocities[i] * timeStep;
     }
     
+    // Atualização dos valores de posição e velocidade
     for (size_t i = 0; i < bodies.size(); ++i) {
         bodies[i].position = newPositions[i];
         bodies[i].velocity = newVelocities[i];
     }
 }
 
+// Criação dos anéis de Saturno
 static std::vector<float> createTorusRing(double mainRadius, double tubeRadius, int mainSegments = 50, int tubeSegments = 20) {
     std::vector<float> vertices;
     const float PI = glm::pi<float>();

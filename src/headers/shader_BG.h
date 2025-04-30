@@ -1,31 +1,32 @@
 #include "libs.h"
 
 
-// Shader sources
+// Fontes de shader
 const char* vertexShaderSource = R"glsl(
-    #version 330 core
-    layout(location=0) in vec3 aPos;
-    layout(location=1) in vec2 aTexCoord;
-    out vec2 TexCoord;
-    uniform mat4 model;
-    uniform mat4 view;
-    uniform mat4 projection;
-    void main() {
-        gl_Position = projection * view * model * vec4(aPos, 1.0);
-        TexCoord = aTexCoord;
-    }
-    )glsl";
+#version 330 core
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec2 aTexCoord;
+out vec2 TexCoord;
+uniform mat4 model;
+uniform mat4 view;
+uniform mat4 projection;
+void main() {
+    gl_Position = projection * view * model * vec4(aPos, 1.0);
+    TexCoord = aTexCoord;
+}
+)glsl";
     
 const char* fragmentShaderSource = R"glsl(
-    #version 330 core
-    out vec4 FragColor;
-    in vec2 TexCoord;
-    uniform sampler2D texture1;
-    void main() {
-    FragColor = texture(texture1, TexCoord);
-    }
-    )glsl";
+#version 330 core
+out vec4 FragColor;
+in vec2 TexCoord;
+uniform sampler2D texture1;
+void main() {
+FragColor = texture(texture1, TexCoord);
+}
+)glsl";
 
+// Compilação de shaders com base no source apresentado
 GLuint compileShader(GLenum type, const char* source) {
     GLuint shader = glCreateShader(type);
     glShaderSource(shader, 1, &source, nullptr);
@@ -42,6 +43,8 @@ GLuint compileShader(GLenum type, const char* source) {
     return shader;
 }
 
+
+// Linkagem de shaders
 GLuint createShaderProgram() {
     GLuint vertexShader = compileShader(GL_VERTEX_SHADER, vertexShaderSource);
     GLuint fragmentShader = compileShader(GL_FRAGMENT_SHADER, fragmentShaderSource);
