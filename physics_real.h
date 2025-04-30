@@ -7,7 +7,7 @@ const int NUM_BODIES = 9;
 
 // Physics constants
 const double G = 6.67430e-11;
-const double timeStep = 432000.0;     // 120 hours in seconds (0.5 Earth day)
+const double timeStep = 43200.0;
 const double positionScale = 5e10;
 const double radiusScale = 1e7;
 const int STACKS = 30;
