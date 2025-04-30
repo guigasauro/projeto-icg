@@ -76,7 +76,7 @@ void main() {
 const double G = 6.67430e-11;
 const double timeStep = 43200.0;     // 12 hours in seconds (0.5 Earth day)
 const double positionScale = 5e10;
-const double radiusScale = 150;
+const double radiusScale = 120;
 const int STACKS = 30;
 const int SECTORS = 30;
 
