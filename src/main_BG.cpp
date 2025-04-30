@@ -1,6 +1,7 @@
-#include "libs.h"
-#include "physics.h"
-#include "shader_illum.h"
+#include "headers/libs.h"
+#include "headers/physics_real.h"
+#include "headers/shader_BG.h"
+
 
 int main() {
     if (!glfwInit()) {
@@ -8,6 +9,7 @@ int main() {
         return -1;
     }
     
+
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
@@ -77,6 +79,9 @@ int main() {
 
     glBindVertexArray(0);
 
+
+    
+
     GLuint shaderProgram = createShaderProgram();
     glUseProgram(shaderProgram);
     
@@ -122,6 +127,7 @@ int main() {
             solarSystemData[i].textureFile
         );
     }
+    
 
     // Crie os anéis de Saturno
     double ringInner = 7e6 / radiusScale; 
@@ -192,16 +198,6 @@ int main() {
     float baseCameraDistance = cameraDistance;
     float cameraFollowDistance = 5.0f;
 
-    glm::vec3 cameraPosition(
-        cameraDistance * sin(cameraAngle),
-        cameraHeight,
-        cameraDistance * cos(cameraAngle)
-    );
-
-    glUniform3fv(glGetUniformLocation(shaderProgram, "lightPos"), 1, glm::value_ptr(glm::vec3(0.0f)));
-    glUniform3fv(glGetUniformLocation(shaderProgram, "lightColor"), 1, glm::value_ptr(glm::vec3(1.0f)));  // Luz branca
-    glUniform3fv(glGetUniformLocation(shaderProgram, "viewPos"), 1, glm::value_ptr(cameraPosition));  // Posição da câmera
-
     while (!glfwWindowShouldClose(window)) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         
@@ -218,7 +214,7 @@ int main() {
             cameraTargetIndex = -1;
         }
 
-        glm::mat4 viewMatrix = glm::mat4(1.0f);
+        glm::mat4 viewMatrix = glm::mat4(1.0f); 
         // Handle camera movement
         if (cameraTargetIndex != -1) {
             // Follow selected body
@@ -231,7 +227,7 @@ int main() {
             if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) cameraHeight += 0.1f;
             if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) cameraHeight -= 0.1f;
 
-            cameraPosition = targetPos + glm::vec3(
+            glm::vec3 cameraPosition = targetPos + glm::vec3(
                 cameraFollowDistance * sin(cameraAngle),
                 cameraHeight,
                 cameraFollowDistance * cos(cameraAngle)
@@ -248,7 +244,12 @@ int main() {
             if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) cameraAngle += 0.01f;
             if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) cameraHeight += 0.1f;
             if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) cameraHeight -= 0.1f;
-            
+
+            glm::vec3 cameraPosition(
+                cameraDistance * sin(cameraAngle),
+                cameraHeight,
+                cameraDistance * cos(cameraAngle)
+            );
             cameraTarget = glm::vec3(0.0f);
             
             viewMatrix = glm::lookAt(cameraPosition, cameraTarget, cameraUp);
@@ -276,7 +277,7 @@ int main() {
         glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projectionMatrix));
 
         // Render all bodies
-        glUniform1i(textureLoc, 0); 
+        glUniform1i(textureLoc, 0);  // Use texture unit 0
         for (size_t i = 0; i < bodies.size(); ++i) {
             glm::mat4 modelMatrix = glm::mat4(1.0f);
             
@@ -287,12 +288,11 @@ int main() {
             
             glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(modelMatrix));
             glActiveTexture(GL_TEXTURE0);
-            glUniform1i(glGetUniformLocation(shaderProgram, "isSun"), bodies[i].isSun);
             glBindTexture(GL_TEXTURE_2D, bodies[i].textureID);
             glBindVertexArray(bodies[i].VAO);
             glDrawArrays(GL_TRIANGLES, 0, bodies[i].vertexCount);
         }
-
+        
         glm::mat4 ringModel = glm::mat4(1.0f);
         glm::vec3 satPos = glm::vec3(bodies[6].position / positionScale);
         ringModel = glm::translate(ringModel, satPos);
@@ -323,8 +323,9 @@ int main() {
     glDeleteVertexArrays(1, &quadVAO);
     glDeleteBuffers(1, &quadVBO);
 
+
     glDeleteProgram(shaderProgram);
     glfwTerminate();
-    
+
     return 0;
 }
