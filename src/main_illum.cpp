@@ -150,6 +150,9 @@ int main() {
         cameraDistance * cos(cameraAngle)
     );
 
+    // Uniforms "lightPos" e "lightColor": posição e cor da luz (Sol)
+    // Uniform "viewPos": posição da câmera para cálculo de especular
+    // "isSun": flag para aplicar efeito de emissão no fragment shader
     glUniform3fv(glGetUniformLocation(shaderProgram, "lightPos"), 1, glm::value_ptr(glm::vec3(0.0f)));
     glUniform3fv(glGetUniformLocation(shaderProgram, "lightColor"), 1, glm::value_ptr(glm::vec3(1.0f)));  // Luz branca
     glUniform3fv(glGetUniformLocation(shaderProgram, "viewPos"), 1, glm::value_ptr(cameraPosition));  // Posição da câmera
@@ -157,6 +160,7 @@ int main() {
     while (!glfwWindowShouldClose(window)) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         
+        // Atualiza física (posições e velocidades dos corpos)
         updatePhysics(bodies);
 
         // Handle camera selection
@@ -207,7 +211,7 @@ int main() {
             glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(viewMatrix));
         }
 
-        // Render all bodies
+        // Renderiza planetas e Sol (com iluminação e texturas)
         glUniform1i(textureLoc, 0); 
         for (size_t i = 0; i < bodies.size(); ++i) {
             glm::mat4 modelMatrix = glm::mat4(1.0f);
@@ -241,7 +245,7 @@ int main() {
         glfwPollEvents();
     }
 
-    // Cleanup
+    // Libera buffers, texturas e shaders
     for (auto& body : bodies) {
         glDeleteVertexArrays(1, &body.VAO);
         glDeleteBuffers(1, &body.VBO);
@@ -252,6 +256,8 @@ int main() {
     glDeleteTextures(1, &ringTexture);
 
     glDeleteProgram(shaderProgram);
+
+    // Encerra GLFW
     glfwTerminate();
     
     return 0;
