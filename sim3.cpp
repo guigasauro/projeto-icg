@@ -36,6 +36,7 @@ void main() {
 }
 )glsl";
 
+
 // Physics constants
 const double G = 6.67430e-11;
 const double timeStep = 432000.0;     // 12 hours in seconds (0.5 Earth day)
@@ -320,6 +321,55 @@ int main() {
     glEnable(GL_DEPTH_TEST);
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
+    GLuint backgroundTexture;
+    glGenTextures(1, &backgroundTexture);
+    glBindTexture(GL_TEXTURE_2D, backgroundTexture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    int bgWidth, bgHeight, bgChannels;
+    stbi_set_flip_vertically_on_load(true);
+    unsigned char* bgData = stbi_load("2k_stars.jpg", &bgWidth, &bgHeight, &bgChannels, 0);
+    if (bgData) {
+        GLenum format = (bgChannels == 4) ? GL_RGBA : GL_RGB;
+        glTexImage2D(GL_TEXTURE_2D, 0, format, bgWidth, bgHeight, 0, format, GL_UNSIGNED_BYTE, bgData);
+        glGenerateMipmap(GL_TEXTURE_2D);
+    } else {
+        std::cerr << "Failed to load background texture" << std::endl;
+    }
+    stbi_image_free(bgData);    
+
+    // Criar geometria do background (quad full-screen)
+    float quadVertices[] = {
+        // positions        // texCoords
+        -1.0f,  1.0f, 1.0f, 0.0f, 1.0f,
+        -1.0f, -1.0f, 1.0f, 0.0f, 0.0f,
+        1.0f, -1.0f, 1.0f, 1.0f, 0.0f,
+        
+        -1.0f,  1.0f, 1.0f, 0.0f, 1.0f,
+        1.0f, -1.0f, 1.0f, 1.0f, 0.0f,
+        1.0f,  1.0f, 1.0f, 1.0f, 1.0f
+    };
+
+    GLuint quadVAO, quadVBO;
+    glGenVertexArrays(1, &quadVAO);
+    glGenBuffers(1, &quadVBO);
+    glBindVertexArray(quadVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    glBindVertexArray(0);
+
+
+    
+
     GLuint shaderProgram = createShaderProgram();
     glUseProgram(shaderProgram);
     
@@ -388,7 +438,7 @@ int main() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     
     int width, height, nrChannels;
-    unsigned char* data = stbi_load("2k_mercury.jpg", &width, &height, &nrChannels, 0);
+    unsigned char* data = stbi_load("2k_saturn_ring_alpha.png", &width, &height, &nrChannels, 0);
     if (data) {
         GLenum format = (nrChannels == 4) ? GL_RGBA : GL_RGB;
         glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
@@ -452,6 +502,7 @@ int main() {
             cameraTargetIndex = -1;
         }
 
+        glm::mat4 viewMatrix = glm::mat4(1.0f); 
         // Handle camera movement
         if (cameraTargetIndex != -1) {
             // Follow selected body
@@ -471,7 +522,7 @@ int main() {
             );
             cameraTarget = targetPos;
             
-            glm::mat4 viewMatrix = glm::lookAt(cameraPosition, cameraTarget, cameraUp);
+            viewMatrix = glm::lookAt(cameraPosition, cameraTarget, cameraUp);
             glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(viewMatrix));
         } else {
             // Free camera mode
@@ -489,9 +540,29 @@ int main() {
             );
             cameraTarget = glm::vec3(0.0f);
             
-            glm::mat4 viewMatrix = glm::lookAt(cameraPosition, cameraTarget, cameraUp);
+            viewMatrix = glm::lookAt(cameraPosition, cameraTarget, cameraUp);
             glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(viewMatrix));
         }
+        
+        glDepthMask(GL_FALSE); // Desativa escrita no depth buffer
+        glDepthFunc(GL_LEQUAL); // Permite profundidade igual
+    
+        // Usar matrizes de identidade para o background
+        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(glm::mat4(1.0f)));
+        glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(glm::mat4(1.0f)));
+        glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(glm::mat4(1.0f)));
+    
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, backgroundTexture);
+        glBindVertexArray(quadVAO);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+    
+        glDepthMask(GL_TRUE); // Reativa escrita no depth buffer
+        glDepthFunc(GL_LESS); // Restaura função padrão
+    
+        // Restaurar matrizes da câmera para os planetas
+        glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(viewMatrix));
+        glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projectionMatrix));
 
         // Render all bodies
         glUniform1i(textureLoc, 0);  // Use texture unit 0
@@ -537,6 +608,12 @@ int main() {
     glDeleteVertexArrays(1, &ringVAO);
     glDeleteBuffers(1, &ringVBO);
     glDeleteTextures(1, &ringTexture);
+
+    glDeleteTextures(1, &backgroundTexture);
+    glDeleteVertexArrays(1, &quadVAO);
+    glDeleteBuffers(1, &quadVBO);
+
+
     glDeleteProgram(shaderProgram);
     glfwTerminate();
 
